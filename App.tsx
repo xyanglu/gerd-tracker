@@ -7,6 +7,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 
 import { TodayScreen } from './src/screens/TodayScreen';
 import { HistoryScreen } from './src/screens/HistoryScreen';
@@ -25,15 +26,19 @@ import {
   intervalForWakeHour, getTodayWakeUp, saveTodayWakeUp,
 } from './src/utils/notifications';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+
+if (!isExpoGo) {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+}
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -83,7 +88,7 @@ export default function App() {
     getTodayWakeUp().then(wakeUp => {
       if (wakeUp) {
         setWakeUpDone(true);
-        loadReminderSettings().then(scheduleAllReminders);
+        if (!isExpoGo) loadReminderSettings().then(scheduleAllReminders);
       } else {
         setWakeUpDone(false);
       }
@@ -92,16 +97,18 @@ export default function App() {
 
   const handleWakeUp = async (time: Date) => {
     await saveTodayWakeUp(time);
-    const settings = await loadReminderSettings();
-    const updated = {
-      ...settings,
-      wakeHour: time.getHours(),
-      wakeMinute: time.getMinutes(),
-      intervalMinutes: intervalForWakeHour(time.getHours()),
-      enabled: true,
-    };
-    await saveReminderSettings(updated);
-    await scheduleAllReminders(updated);
+    if (!isExpoGo) {
+      const settings = await loadReminderSettings();
+      const updated = {
+        ...settings,
+        wakeHour: time.getHours(),
+        wakeMinute: time.getMinutes(),
+        intervalMinutes: intervalForWakeHour(time.getHours()),
+        enabled: true,
+      };
+      await saveReminderSettings(updated);
+      await scheduleAllReminders(updated);
+    }
     setWakeUpDone(true);
   };
 

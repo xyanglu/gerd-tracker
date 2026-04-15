@@ -59,40 +59,42 @@ export async function requestNotificationPermission(): Promise<boolean> {
 const MEAL_LABELS = ['1st', '2nd', '3rd', '4th', '5th'];
 
 export async function scheduleAllReminders(settings: MealReminderSettings): Promise<void> {
-  // Cancel previous
-  await cancelAllReminders();
+  try {
+    await cancelAllReminders();
 
-  if (!settings.enabled) return;
+    if (!settings.enabled) return;
 
-  const granted = await requestNotificationPermission();
-  if (!granted) return;
+    const granted = await requestNotificationPermission();
+    if (!granted) return;
 
-  // Set channel for Android
-  await Notifications.setNotificationChannelAsync('meal-reminders', {
-    name: 'Meal Reminders',
-    importance: Notifications.AndroidImportance.HIGH,
-    sound: 'default',
-    vibrationPattern: [0, 250, 250, 250],
-  });
-
-  const times = calcMealTimes(settings);
-
-  for (let i = 0; i < times.length; i++) {
-    const [hour, minute] = times[i];
-    await Notifications.scheduleNotificationAsync({
-      identifier: `${NOTIFICATION_ID_PREFIX}${i}`,
-      content: {
-        title: `Time to eat! (${MEAL_LABELS[i]} meal)`,
-        body: 'Log your meal in GERD Tracker.',
-        sound: 'default',
-        data: { type: 'meal_reminder', index: i },
-      },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DAILY,
-        hour,
-        minute,
-      },
+    await Notifications.setNotificationChannelAsync('meal-reminders', {
+      name: 'Meal Reminders',
+      importance: Notifications.AndroidImportance.HIGH,
+      sound: 'default',
+      vibrationPattern: [0, 250, 250, 250],
     });
+
+    const times = calcMealTimes(settings);
+
+    for (let i = 0; i < times.length; i++) {
+      const [hour, minute] = times[i];
+      await Notifications.scheduleNotificationAsync({
+        identifier: `${NOTIFICATION_ID_PREFIX}${i}`,
+        content: {
+          title: `Time to eat! (${MEAL_LABELS[i]} meal)`,
+          body: 'Log your meal in GERD Tracker.',
+          sound: 'default',
+          data: { type: 'meal_reminder', index: i },
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DAILY,
+          hour,
+          minute,
+        },
+      });
+    }
+  } catch {
+    // Notifications not supported in this environment (e.g. Expo Go)
   }
 }
 
