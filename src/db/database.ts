@@ -48,6 +48,12 @@ async function initDb(db: SQLite.SQLiteDatabase): Promise<void> {
       severity INTEGER NOT NULL DEFAULT 3
     );
   `);
+  // Migration: add gaviscon_doses to meals if it doesn't exist yet
+  try {
+    await db.execAsync(`ALTER TABLE meals ADD COLUMN gaviscon_doses INTEGER DEFAULT 0`);
+  } catch (_) {
+    // column already exists
+  }
 }
 
 // ── Day helpers ──────────────────────────────────────────────────────────────
@@ -116,8 +122,8 @@ export async function deleteToiletSession(id: number): Promise<void> {
 export async function insertMeal(meal: Omit<Meal, 'id'>): Promise<number> {
   const db = await getDb();
   const result = await db.runAsync(
-    `INSERT INTO meals (date, logged_at, name, description, photo_uri) VALUES (?, ?, ?, ?, ?)`,
-    meal.date, meal.logged_at, meal.name, meal.description ?? null, meal.photo_uri ?? null
+    `INSERT INTO meals (date, logged_at, name, description, photo_uri, gaviscon_doses) VALUES (?, ?, ?, ?, ?, ?)`,
+    meal.date, meal.logged_at, meal.name, meal.description ?? null, meal.photo_uri ?? null, meal.gaviscon_doses ?? 0
   );
   return result.lastInsertRowId;
 }

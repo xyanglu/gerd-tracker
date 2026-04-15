@@ -66,6 +66,14 @@ export function MealDetailScreen() {
         <Text style={styles.mealName}>{meal.name}</Text>
         <Text style={styles.mealMeta}>{formatDate(meal.date)} · {formatTime(meal.logged_at)}</Text>
         {meal.description ? <Text style={styles.mealDesc}>{meal.description}</Text> : null}
+        {meal.gaviscon_doses > 0 && (
+          <View style={styles.gavisconRow}>
+            <Ionicons name="medical" size={14} color={colors.accent} />
+            <Text style={styles.gavisconText}>
+              {' '}{meal.gaviscon_doses} Gaviscon dose{meal.gaviscon_doses !== 1 ? 's' : ''} with this meal
+            </Text>
+          </View>
+        )}
         <TouchableOpacity style={styles.deleteBtn} onPress={handleDeleteMeal}>
           <Ionicons name="trash-outline" size={16} color={colors.danger} />
           <Text style={styles.deleteBtnText}> Delete meal</Text>
@@ -119,6 +127,8 @@ const styles = StyleSheet.create({
   mealDesc: { fontSize: 14, color: colors.textPrimary, marginTop: 8 },
   deleteBtn: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
   deleteBtnText: { color: colors.danger, fontSize: 13, fontWeight: '500' },
+  gavisconRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
+  gavisconText: { fontSize: 13, color: colors.accent, fontWeight: '500' },
   symptomsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
   sectionTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
   addBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.danger, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20 },

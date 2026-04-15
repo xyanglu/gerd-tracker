@@ -9,7 +9,7 @@ import { Card } from '../components/Card';
 import { colors } from '../utils/colors';
 import {
   getOrCreateDay, updateDay, startToiletSession, endToiletSession,
-  getToiletSessions, getMealsForDate, deleteToiletSession,
+  getToiletSessions, getMealsForDate, deleteToiletSession, deleteMeal,
 } from '../db/database';
 import { todayString, nowISO, formatDurationSec, formatTime, secondsBetween } from '../utils/dateUtils';
 import type { Day, ToiletSession, Meal } from '../types';
@@ -102,6 +102,18 @@ export function TodayScreen() {
     await endToiletSession(activeSession.id, now, dur);
     setActiveSession(null);
     await load();
+  };
+
+  const deleteMealEntry = (id: number) => {
+    Alert.alert('Delete meal?', 'This will also delete all associated symptoms.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive', onPress: async () => {
+          await deleteMeal(id);
+          await load();
+        },
+      },
+    ]);
   };
 
   const deleteSession = (id: number) => {
@@ -250,9 +262,24 @@ export function TodayScreen() {
             <Card style={styles.mealCard}>
               <View style={styles.rowBetween}>
                 <Text style={styles.mealName}>{meal.name}</Text>
-                <Text style={styles.mealTime}>{formatTime(meal.logged_at)}</Text>
+                <View style={styles.rowCenter}>
+                  <Text style={styles.mealTime}>{formatTime(meal.logged_at)}</Text>
+                  <TouchableOpacity
+                    style={styles.mealDeleteBtn}
+                    onPress={() => deleteMealEntry(meal.id)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="trash-outline" size={16} color={colors.textDisabled} />
+                  </TouchableOpacity>
+                </View>
               </View>
               {meal.description ? <Text style={styles.mealDesc}>{meal.description}</Text> : null}
+              {meal.gaviscon_doses > 0 && (
+                <View style={styles.gavisconBadge}>
+                  <Ionicons name="medical" size={12} color={colors.accent} />
+                  <Text style={styles.gavisconBadgeText}> {meal.gaviscon_doses} Gaviscon</Text>
+                </View>
+              )}
               <TouchableOpacity
                 style={styles.logSymptomBtn}
                 onPress={() => navigation.navigate('LogSymptom', { preselectedMealId: meal.id })}
@@ -303,4 +330,7 @@ const styles = StyleSheet.create({
   logSymptomBtn: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
   logSymptomText: { fontSize: 13, color: colors.danger, fontWeight: '500' },
   emptyText: { color: colors.textDisabled, textAlign: 'center', fontSize: 14 },
+  mealDeleteBtn: { marginLeft: 8 },
+  gavisconBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
+  gavisconBadgeText: { fontSize: 12, color: colors.accent, fontWeight: '500' },
 });

@@ -21,6 +21,7 @@ export interface Meal {
   name: string;
   description: string | null;
   photo_uri: string | null;
+  gaviscon_doses: number;
 }
 
 export interface Symptom {

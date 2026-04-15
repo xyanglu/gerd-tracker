@@ -19,6 +19,7 @@ export function LogMealScreen() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [gavisconDoses, setGavisconDoses] = useState(0);
   const [saving, setSaving] = useState(false);
 
   const pickImage = async () => {
@@ -82,6 +83,7 @@ export function LogMealScreen() {
         name: name.trim(),
         description: description.trim() || null,
         photo_uri: photoUri,
+        gaviscon_doses: gavisconDoses,
       });
       navigation.navigate('MealDetail', { mealId: id });
     } finally {
@@ -112,6 +114,26 @@ export function LogMealScreen() {
         numberOfLines={3}
         textAlignVertical="top"
       />
+
+      <Text style={styles.label}>Gaviscon doses (optional)</Text>
+      <View style={styles.gavisconRow}>
+        <TouchableOpacity
+          style={styles.counterBtn}
+          onPress={() => setGavisconDoses(d => Math.max(0, d - 1))}
+        >
+          <Ionicons name="remove" size={20} color={colors.accent} />
+        </TouchableOpacity>
+        <Text style={styles.counterVal}>{gavisconDoses}</Text>
+        <TouchableOpacity
+          style={styles.counterBtn}
+          onPress={() => setGavisconDoses(d => d + 1)}
+        >
+          <Ionicons name="add" size={20} color={colors.accent} />
+        </TouchableOpacity>
+        {gavisconDoses > 0 && (
+          <Text style={styles.gavisconHint}>dose{gavisconDoses !== 1 ? 's' : ''} taken with this meal</Text>
+        )}
+      </View>
 
       <Text style={styles.label}>Photo (optional)</Text>
       {photoUri ? (
@@ -183,4 +205,8 @@ const styles = StyleSheet.create({
   },
   saveBtnDisabled: { opacity: 0.6 },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  gavisconRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  counterBtn: { padding: 8, borderRadius: 8, backgroundColor: colors.accentLight },
+  counterVal: { fontSize: 22, fontWeight: '700', color: colors.textPrimary, minWidth: 28, textAlign: 'center' },
+  gavisconHint: { fontSize: 13, color: colors.textSecondary, flex: 1 },
 });
