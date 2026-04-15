@@ -55,7 +55,8 @@
           "defaultChannel": "meal-reminders"
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-sqlite"
     ],
     "web": {
       "favicon": "./assets/favicon.png"
