@@ -1,5 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { format } from 'date-fns';
 
 export interface MealReminderSettings {
   enabled: boolean;
@@ -11,6 +12,7 @@ export interface MealReminderSettings {
 
 const SETTINGS_KEY = 'meal_reminder_settings';
 const NOTIFICATION_ID_PREFIX = 'meal_reminder_';
+const WAKE_UP_KEY = 'wake_up_record';
 
 export const DEFAULT_SETTINGS: MealReminderSettings = {
   enabled: false,
@@ -91,6 +93,32 @@ export async function scheduleAllReminders(settings: MealReminderSettings): Prom
         minute,
       },
     });
+  }
+}
+
+/** Returns 180 (3h) for early risers (before 8 am), 120 (2h) otherwise. */
+export function intervalForWakeHour(hour: number): number {
+  return hour < 8 ? 180 : 120;
+}
+
+/** Persist today's wake-up time. */
+export async function saveTodayWakeUp(time: Date): Promise<void> {
+  await AsyncStorage.setItem(
+    WAKE_UP_KEY,
+    JSON.stringify({ date: format(time, 'yyyy-MM-dd'), iso: time.toISOString() }),
+  );
+}
+
+/** Returns the wake-up Date if one was recorded today, otherwise null. */
+export async function getTodayWakeUp(): Promise<Date | null> {
+  try {
+    const raw = await AsyncStorage.getItem(WAKE_UP_KEY);
+    if (!raw) return null;
+    const { date, iso } = JSON.parse(raw);
+    if (date !== format(new Date(), 'yyyy-MM-dd')) return null;
+    return new Date(iso);
+  } catch {
+    return null;
   }
 }
 

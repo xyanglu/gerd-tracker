@@ -1,5 +1,5 @@
 import 'react-native-gesture-handler';
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -18,8 +18,12 @@ import { LogMealScreen } from './src/screens/LogMealScreen';
 import { LogSymptomScreen } from './src/screens/LogSymptomScreen';
 import { MealDetailScreen } from './src/screens/MealDetailScreen';
 import { DayDetailScreen } from './src/screens/DayDetailScreen';
+import { WakeUpScreen } from './src/screens/WakeUpScreen';
 import { colors } from './src/utils/colors';
-import { loadReminderSettings, scheduleAllReminders } from './src/utils/notifications';
+import {
+  loadReminderSettings, saveReminderSettings, scheduleAllReminders,
+  intervalForWakeHour, getTodayWakeUp, saveTodayWakeUp,
+} from './src/utils/notifications';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -72,9 +76,44 @@ function FoodStack() {
 }
 
 export default function App() {
+  // null = still checking, false = need wake-up, true = done
+  const [wakeUpDone, setWakeUpDone] = useState<boolean | null>(null);
+
   useEffect(() => {
-    loadReminderSettings().then(scheduleAllReminders);
+    getTodayWakeUp().then(wakeUp => {
+      if (wakeUp) {
+        setWakeUpDone(true);
+        loadReminderSettings().then(scheduleAllReminders);
+      } else {
+        setWakeUpDone(false);
+      }
+    });
   }, []);
+
+  const handleWakeUp = async (time: Date) => {
+    await saveTodayWakeUp(time);
+    const settings = await loadReminderSettings();
+    const updated = {
+      ...settings,
+      wakeHour: time.getHours(),
+      wakeMinute: time.getMinutes(),
+      intervalMinutes: intervalForWakeHour(time.getHours()),
+      enabled: true,
+    };
+    await saveReminderSettings(updated);
+    await scheduleAllReminders(updated);
+    setWakeUpDone(true);
+  };
+
+  if (wakeUpDone === null) return null;
+
+  if (!wakeUpDone) {
+    return (
+      <SafeAreaProvider>
+        <WakeUpScreen onWakeUp={handleWakeUp} />
+      </SafeAreaProvider>
+    );
+  }
 
   return (
     <SafeAreaProvider>
