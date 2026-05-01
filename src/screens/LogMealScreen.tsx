@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, Image, Alert, ActivityIndicator,
@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { colors } from '../utils/colors';
-import { insertMeal } from '../db/database';
+import { insertMeal, insertMealPhoto, getDistinctMealNames } from '../db/database';
 import { nowISO, todayString } from '../utils/dateUtils';
 
 export function LogMealScreen() {
@@ -17,10 +17,21 @@ export function LogMealScreen() {
   const date: string = route.params?.date ?? todayString();
 
   const [name, setName] = useState('');
+  const [nameFocused, setNameFocused] = useState(false);
+  const [allMealNames, setAllMealNames] = useState<string[]>([]);
   const [description, setDescription] = useState('');
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
-  const [gavisconDoses, setGavisconDoses] = useState(0);
+  const [photoUris, setPhotoUris] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    getDistinctMealNames().then(setAllMealNames);
+  }, []);
+
+  const suggestions = name.trim().length > 0
+    ? allMealNames
+        .filter(n => n.toLowerCase().includes(name.toLowerCase()) && n.toLowerCase() !== name.toLowerCase())
+        .slice(0, 5)
+    : [];
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -43,9 +54,7 @@ export function LogMealScreen() {
       Alert.alert('Permission needed', 'Allow camera access to take food photos.');
       return;
     }
-    const result = await ImagePicker.launchCameraAsync({
-      quality: 0.7,
-    });
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
     if (!result.canceled && result.assets[0]) {
       await savePhoto(result.assets[0].uri);
     }
@@ -57,10 +66,12 @@ export function LogMealScreen() {
     const filename = `meal_${Date.now()}.jpg`;
     const dest = `${dir}${filename}`;
     await FileSystem.copyAsync({ from: uri, to: dest });
-    setPhotoUri(dest);
+    setPhotoUris(prev => [...prev, dest]);
   };
 
-  const removePhoto = () => setPhotoUri(null);
+  const removePhoto = (index: number) => {
+    setPhotoUris(prev => prev.filter((_, i) => i !== index));
+  };
 
   const showPhotoOptions = () => {
     Alert.alert('Add photo', '', [
@@ -82,10 +93,13 @@ export function LogMealScreen() {
         logged_at: nowISO(),
         name: name.trim(),
         description: description.trim() || null,
-        photo_uri: photoUri,
-        gaviscon_doses: gavisconDoses,
+        photo_uri: photoUris[0] ?? null,
+        gaviscon_doses: 0,
       });
-      navigation.navigate('MealDetail', { mealId: id });
+      for (let i = 0; i < photoUris.length; i++) {
+        await insertMealPhoto(id, photoUris[i], i);
+      }
+      navigation.goBack();
     } finally {
       setSaving(false);
     }
@@ -100,8 +114,24 @@ export function LogMealScreen() {
         placeholderTextColor={colors.textDisabled}
         value={name}
         onChangeText={setName}
+        onFocus={() => setNameFocused(true)}
+        onBlur={() => setTimeout(() => setNameFocused(false), 150)}
         autoFocus
       />
+      {nameFocused && suggestions.length > 0 && (
+        <View style={styles.suggestions}>
+          {suggestions.map(s => (
+            <TouchableOpacity
+              key={s}
+              style={styles.suggestion}
+              onPress={() => { setName(s); setNameFocused(false); }}
+            >
+              <Ionicons name="time-outline" size={14} color={colors.textDisabled} style={styles.suggestionIcon} />
+              <Text style={styles.suggestionText}>{s}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
 
       <Text style={styles.label}>Notes (optional)</Text>
       <TextInput
@@ -115,40 +145,21 @@ export function LogMealScreen() {
         textAlignVertical="top"
       />
 
-      <Text style={styles.label}>Gaviscon doses (optional)</Text>
-      <View style={styles.gavisconRow}>
-        <TouchableOpacity
-          style={styles.counterBtn}
-          onPress={() => setGavisconDoses(d => Math.max(0, d - 1))}
-        >
-          <Ionicons name="remove" size={20} color={colors.accent} />
+      <Text style={styles.label}>Photos (optional)</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photoRow} contentContainerStyle={styles.photoRowContent}>
+        {photoUris.map((uri, i) => (
+          <View key={i} style={styles.thumbWrapper}>
+            <Image source={{ uri }} style={styles.thumb} />
+            <TouchableOpacity style={styles.thumbRemove} onPress={() => removePhoto(i)}>
+              <Ionicons name="close-circle" size={22} color={colors.danger} />
+            </TouchableOpacity>
+          </View>
+        ))}
+        <TouchableOpacity style={styles.addPhotoBtn} onPress={showPhotoOptions}>
+          <Ionicons name="camera" size={26} color={colors.textSecondary} />
+          <Text style={styles.addPhotoBtnText}>{photoUris.length === 0 ? 'Add photo' : 'Add more'}</Text>
         </TouchableOpacity>
-        <Text style={styles.counterVal}>{gavisconDoses}</Text>
-        <TouchableOpacity
-          style={styles.counterBtn}
-          onPress={() => setGavisconDoses(d => d + 1)}
-        >
-          <Ionicons name="add" size={20} color={colors.accent} />
-        </TouchableOpacity>
-        {gavisconDoses > 0 && (
-          <Text style={styles.gavisconHint}>dose{gavisconDoses !== 1 ? 's' : ''} taken with this meal</Text>
-        )}
-      </View>
-
-      <Text style={styles.label}>Photo (optional)</Text>
-      {photoUri ? (
-        <View>
-          <Image source={{ uri: photoUri }} style={styles.preview} />
-          <TouchableOpacity style={styles.removePhoto} onPress={removePhoto}>
-            <Ionicons name="close-circle" size={28} color={colors.danger} />
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <TouchableOpacity style={styles.photoBtn} onPress={showPhotoOptions}>
-          <Ionicons name="camera" size={28} color={colors.textSecondary} />
-          <Text style={styles.photoBtnText}>Add food photo</Text>
-        </TouchableOpacity>
-      )}
+      </ScrollView>
 
       <TouchableOpacity
         style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
@@ -180,20 +191,45 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   multiline: { minHeight: 80 },
-  photoBtn: {
+  suggestions: {
     backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 10,
+    borderBottomRightRadius: 10,
+    overflow: 'hidden',
+    marginTop: -1,
+  },
+  suggestion: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    gap: 8,
+  },
+  suggestionIcon: { flexShrink: 0 },
+  suggestionText: { fontSize: 14, color: colors.textPrimary },
+  photoRow: { marginTop: 4 },
+  photoRowContent: { gap: 10, paddingVertical: 4 },
+  thumbWrapper: { position: 'relative' },
+  thumb: { width: 90, height: 90, borderRadius: 10 },
+  thumbRemove: { position: 'absolute', top: -6, right: -6 },
+  addPhotoBtn: {
+    width: 90,
+    height: 90,
     borderRadius: 10,
     borderWidth: 2,
     borderColor: colors.border,
     borderStyle: 'dashed',
-    padding: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 4,
+    backgroundColor: colors.surface,
   },
-  photoBtnText: { color: colors.textSecondary, fontSize: 14 },
-  preview: { width: '100%', height: 200, borderRadius: 10 },
-  removePhoto: { position: 'absolute', top: 8, right: 8 },
+  addPhotoBtnText: { color: colors.textSecondary, fontSize: 11 },
   saveBtn: {
     backgroundColor: colors.primary,
     borderRadius: 12,
@@ -205,8 +241,4 @@ const styles = StyleSheet.create({
   },
   saveBtnDisabled: { opacity: 0.6 },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  gavisconRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  counterBtn: { padding: 8, borderRadius: 8, backgroundColor: colors.accentLight },
-  counterVal: { fontSize: 22, fontWeight: '700', color: colors.textPrimary, minWidth: 28, textAlign: 'center' },
-  gavisconHint: { fontSize: 13, color: colors.textSecondary, flex: 1 },
 });

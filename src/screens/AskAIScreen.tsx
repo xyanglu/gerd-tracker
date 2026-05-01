@@ -7,7 +7,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../utils/colors';
-import { streamChat, getStoredApiKey } from '../services/claudeService';
+import { streamChat, getStoredApiKey, AgentType, ChatMessage } from '../services/claudeService';
 
 interface Message {
   id: string;
@@ -16,16 +16,32 @@ interface Message {
   streaming?: boolean;
 }
 
-const SUGGESTIONS = [
-  'Which foods trigger my symptoms most often?',
-  'How long after eating do my symptoms usually start?',
-  'Which foods seem safe for me?',
-  'What severity do my worst symptoms reach?',
-];
+const SUGGESTIONS: Record<AgentType, string[]> = {
+  today: [
+    'How long after eating did my symptoms start today?',
+    'Which meal today seems to be causing problems?',
+    'How does my water intake look today?',
+    'Summarize my day so far.',
+  ],
+  trends: [
+    'Which foods trigger my symptoms most often?',
+    'What are my safest foods based on history?',
+    'Do I have more symptoms on days I skip Metamucil?',
+    'What patterns do you see over the past month?',
+  ],
+};
+
+function toHistory(messages: Message[]): ChatMessage[] {
+  return messages
+    .filter(m => !m.streaming && m.role !== 'error')
+    .map(m => ({ role: m.role as 'user' | 'assistant', content: m.text }));
+}
 
 export function AskAIScreen() {
   const [hasKey, setHasKey] = useState<boolean | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [activeTab, setActiveTab] = useState<AgentType>('today');
+  const [todayMessages, setTodayMessages] = useState<Message[]>([]);
+  const [trendsMessages, setTrendsMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const listRef = useRef<FlatList>(null);
@@ -34,6 +50,15 @@ export function AskAIScreen() {
   useFocusEffect(useCallback(() => {
     getStoredApiKey().then(k => setHasKey(!!k));
   }, []));
+
+  const messages = activeTab === 'today' ? todayMessages : trendsMessages;
+  const setMessages = activeTab === 'today' ? setTodayMessages : setTrendsMessages;
+
+  const switchTab = (tab: AgentType) => {
+    if (tab === activeTab || loading) return;
+    setActiveTab(tab);
+    setInput('');
+  };
 
   if (hasKey === null) return null;
 
@@ -67,16 +92,17 @@ export function AskAIScreen() {
     const aiMsg: Message = { id: aiId, role: 'assistant', text: '', streaming: true };
     streamingIdRef.current = aiId;
 
+    const currentHistory = toHistory(messages);
     setMessages(prev => [...prev, userMsg, aiMsg]);
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
 
     await streamChat(
+      activeTab,
+      currentHistory,
       text,
       (delta) => {
         setMessages(prev =>
-          prev.map(m =>
-            m.id === aiId ? { ...m, text: m.text + delta } : m
-          )
+          prev.map(m => m.id === aiId ? { ...m, text: m.text + delta } : m)
         );
       },
       () => {
@@ -103,10 +129,42 @@ export function AskAIScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={90}
     >
+      {/* Tab switcher */}
+      <View style={styles.tabBar}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'today' && styles.tabActive]}
+          onPress={() => switchTab('today')}
+        >
+          <Ionicons
+            name="today-outline"
+            size={15}
+            color={activeTab === 'today' ? colors.primary : colors.textSecondary}
+          />
+          <Text style={[styles.tabText, activeTab === 'today' && styles.tabTextActive]}>
+            {' '}Today
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'trends' && styles.tabActive]}
+          onPress={() => switchTab('trends')}
+        >
+          <Ionicons
+            name="trending-up-outline"
+            size={15}
+            color={activeTab === 'trends' ? colors.primary : colors.textSecondary}
+          />
+          <Text style={[styles.tabText, activeTab === 'trends' && styles.tabTextActive]}>
+            {' '}Trends
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       {messages.length === 0 ? (
         <View style={styles.suggestions}>
-          <Text style={styles.suggestionsTitle}>Ask about your patterns</Text>
-          {SUGGESTIONS.map(s => (
+          <Text style={styles.suggestionsTitle}>
+            {activeTab === 'today' ? "Ask about today's activity" : 'Ask about your patterns'}
+          </Text>
+          {SUGGESTIONS[activeTab].map(s => (
             <TouchableOpacity key={s} style={styles.suggestionBtn} onPress={() => send(s)}>
               <Text style={styles.suggestionText}>{s}</Text>
               <Ionicons name="arrow-forward" size={14} color={colors.primary} />
@@ -128,7 +186,7 @@ export function AskAIScreen() {
       <View style={styles.inputRow}>
         <TextInput
           style={styles.input}
-          placeholder="Ask about your symptoms…"
+          placeholder={activeTab === 'today' ? "Ask about today…" : "Ask about trends…"}
           placeholderTextColor={colors.textDisabled}
           value={input}
           onChangeText={setInput}
@@ -178,6 +236,22 @@ function MessageBubble({ message }: { message: Message }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  tabBar: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  tab: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 12,
+  },
+  tabActive: {
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
+  },
+  tabText: { fontSize: 14, fontWeight: '500', color: colors.textSecondary },
+  tabTextActive: { color: colors.primary, fontWeight: '700' },
   noKeyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },
   noKeyTitle: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
   noKeyBody: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', lineHeight: 21 },

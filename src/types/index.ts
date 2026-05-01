@@ -26,10 +26,12 @@ export interface Meal {
 
 export interface Symptom {
   id: number;
-  meal_id: number;
+  meal_id: number | null;
+  date: string; // YYYY-MM-DD
   logged_at: string; // ISO datetime
   description: string;
   severity: number; // 1–5
+  gaviscon_tsp: number;
 }
 
 export interface MealWithSymptoms extends Meal {
@@ -39,4 +41,5 @@ export interface MealWithSymptoms extends Meal {
 export interface DayDetail extends Day {
   toilet_sessions: ToiletSession[];
   meals: MealWithSymptoms[];
+  symptoms: Symptom[];
 }

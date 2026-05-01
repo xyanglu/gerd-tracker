@@ -31,7 +31,11 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
+
+# Claude Code local settings
+.claude/
 
 # typescript
 *.tsbuildinfo
@@ -40,3 +44,4 @@ yarn-error.*
 /ios
 /android
 .gstack/
+.phone-ip

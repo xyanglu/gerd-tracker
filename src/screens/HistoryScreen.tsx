@@ -6,13 +6,14 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../components/Card';
 import { colors } from '../utils/colors';
-import { getAllDays, getMealsForDate, getToiletSessions } from '../db/database';
+import { getAllDays, getMealsForDate, getToiletSessions, getGavisconTspForDate } from '../db/database';
 import { formatDate, totalToiletMinutes, formatDurationSec } from '../utils/dateUtils';
 import type { Day } from '../types';
 
 interface DayRow extends Day {
   mealCount: number;
   toiletMinutes: number;
+  mealGavisconTotal: number;
 }
 
 export function HistoryScreen() {
@@ -26,12 +27,16 @@ export function HistoryScreen() {
   const load = async () => {
     const days = await getAllDays();
     const enriched = await Promise.all(days.map(async d => {
-      const meals = await getMealsForDate(d.date);
-      const sessions = await getToiletSessions(d.date);
+      const [meals, sessions, gavTsp] = await Promise.all([
+        getMealsForDate(d.date),
+        getToiletSessions(d.date),
+        getGavisconTspForDate(d.date),
+      ]);
       return {
         ...d,
         mealCount: meals.length,
         toiletMinutes: totalToiletMinutes(sessions),
+        mealGavisconTotal: gavTsp + d.gaviscon_doses,
       };
     }));
     setRows(enriched);
@@ -60,7 +65,7 @@ export function HistoryScreen() {
             <View style={styles.pills}>
               <Pill icon="water" color={colors.info} label={`${item.water_ml} mL`} achieved={item.water_ml >= 1000} />
               <Pill icon="leaf" color={colors.primary} label="Metamucil" achieved={item.metamucil === 1} />
-              <Pill icon="medical" color={colors.accent} label={`${item.gaviscon_doses}x Gav`} />
+              <Pill icon="medical" color={colors.accent} label={`${item.mealGavisconTotal} tsp Gav`} />
               <Pill icon="timer-outline" color={colors.textSecondary} label={`${item.toiletMinutes}m toilet`} />
               <Pill icon="restaurant-outline" color={colors.primaryLight} label={`${item.mealCount} meals`} />
             </View>

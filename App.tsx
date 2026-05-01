@@ -23,20 +23,24 @@ import { WakeUpScreen } from './src/screens/WakeUpScreen';
 import { colors } from './src/utils/colors';
 import {
   loadReminderSettings, saveReminderSettings, scheduleAllReminders,
-  intervalForWakeHour, getTodayWakeUp, saveTodayWakeUp,
+  intervalForWakeHour, getTodayWakeUp, saveTodayWakeUp, wasRecentMealLogged,
 } from './src/utils/notifications';
 
 const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
 if (!isExpoGo) {
   Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    }),
+    handleNotification: async () => {
+      const settings = await loadReminderSettings();
+      const recentMeal = await wasRecentMealLogged(settings.intervalMinutes);
+      return {
+        shouldShowAlert: !recentMeal,
+        shouldPlaySound: !recentMeal,
+        shouldSetBadge: false,
+        shouldShowBanner: !recentMeal,
+        shouldShowList: !recentMeal,
+      };
+    },
   });
 }
 

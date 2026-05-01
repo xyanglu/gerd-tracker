@@ -1,6 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { format } from 'date-fns';
+import { format, subMinutes } from 'date-fns';
+import { getRecentMeals } from '../db/database';
 
 export interface MealReminderSettings {
   enabled: boolean;
@@ -130,5 +131,16 @@ export async function cancelAllReminders(): Promise<void> {
     if (n.identifier.startsWith(NOTIFICATION_ID_PREFIX)) {
       await Notifications.cancelScheduledNotificationAsync(n.identifier);
     }
+  }
+}
+
+/** Returns true if a meal was logged within the last `withinMinutes` minutes. */
+export async function wasRecentMealLogged(withinMinutes: number): Promise<boolean> {
+  try {
+    const since = subMinutes(new Date(), withinMinutes).toISOString();
+    const meals = await getRecentMeals(since);
+    return meals.length > 0;
+  } catch {
+    return false;
   }
 }

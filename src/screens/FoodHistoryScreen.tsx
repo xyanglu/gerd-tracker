@@ -76,7 +76,10 @@ export function FoodHistoryScreen() {
                 >
                   <View style={styles.entryHeader}>
                     <Text style={styles.entryDate}>{formatDate(meal.date)}</Text>
-                    <Text style={styles.entryTime}>{formatTime(meal.logged_at)}</Text>
+                    <View style={styles.entryRight}>
+                      <Text style={styles.entryTime}>{formatTime(meal.logged_at)}</Text>
+                      <Ionicons name="chevron-forward" size={14} color={colors.textDisabled} />
+                    </View>
                   </View>
 
                   {meal.symptoms.length === 0 ? (
@@ -122,8 +125,9 @@ const styles = StyleSheet.create({
     borderTopWidth: 1, borderTopColor: colors.border,
     paddingTop: 10, paddingBottom: 6, marginTop: 4,
   },
-  entryHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
+  entryHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   entryDate: { fontSize: 13, color: colors.textSecondary, fontWeight: '500' },
+  entryRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   entryTime: { fontSize: 12, color: colors.textDisabled },
   noSymptoms: { fontSize: 12, color: colors.textDisabled, fontStyle: 'italic' },
   symptomRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },

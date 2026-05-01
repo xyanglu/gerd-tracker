@@ -21,6 +21,10 @@ export function DayDetailScreen() {
   if (!detail) return null;
 
   const toiletTotal = totalToiletMinutes(detail.toilet_sessions);
+  const gavisconTotal = detail.meals.reduce(
+    (sum, m) => sum + m.symptoms.reduce((s2, sym) => s2 + (sym.gaviscon_tsp ?? 0), 0),
+    0
+  ) + detail.symptoms.reduce((sum, s) => sum + (s.gaviscon_tsp ?? 0), 0) + detail.gaviscon_doses;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -31,7 +35,7 @@ export function DayDetailScreen() {
         <Text style={styles.sectionTitle}>Daily metrics</Text>
         <MetricRow icon="water" color={colors.info} label="Water" value={`${detail.water_ml} mL`} good={detail.water_ml >= 1000} />
         <MetricRow icon="leaf" color={colors.primary} label="Metamucil" value={detail.metamucil ? 'Taken' : 'Not taken'} good={!!detail.metamucil} />
-        <MetricRow icon="medical" color={colors.accent} label="Gaviscon" value={`${detail.gaviscon_doses} dose${detail.gaviscon_doses !== 1 ? 's' : ''}`} />
+        <MetricRow icon="medical" color={colors.accent} label="Gaviscon" value={`${gavisconTotal} tsp`} />
         <MetricRow icon="timer" color={colors.textSecondary} label="Toilet time" value={`${toiletTotal} min`} />
       </Card>
 
@@ -45,6 +49,25 @@ export function DayDetailScreen() {
               <Text style={styles.sessionDur}>
                 {s.duration_seconds != null ? formatDurationSec(s.duration_seconds) : 'In progress'}
               </Text>
+            </View>
+          ))}
+        </Card>
+      )}
+
+      {/* Standalone symptoms */}
+      {detail.symptoms.length > 0 && (
+        <Card>
+          <Text style={styles.sectionTitle}>Symptoms</Text>
+          {detail.symptoms.filter(s => s.meal_id === null).map(s => (
+            <View key={s.id} style={styles.symptomRow}>
+              <Text style={styles.symptomTime}>{formatTime(s.logged_at)}</Text>
+              <View style={[styles.symptomChip, { borderColor: severityColor(s.severity) }]}>
+                <View style={[styles.dot, { backgroundColor: severityColor(s.severity) }]} />
+                <Text style={styles.symptomText}>{s.description}</Text>
+                <Text style={[styles.sevLabel, { color: severityColor(s.severity) }]}>
+                  {severityLabel(s.severity)}
+                </Text>
+              </View>
             </View>
           ))}
         </Card>
@@ -118,6 +141,8 @@ const styles = StyleSheet.create({
   mealDesc: { fontSize: 13, color: colors.textSecondary, marginTop: 4 },
   symptomsContainer: { marginTop: 8, gap: 6 },
   symptomChip: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 8, padding: 6, gap: 4 },
+  symptomRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, gap: 12 },
+  symptomTime: { fontSize: 13, color: colors.textSecondary, minWidth: 50 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   symptomText: { flex: 1, fontSize: 13, color: colors.textPrimary },
   sevLabel: { fontSize: 11, fontWeight: '600' },

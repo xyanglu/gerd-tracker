@@ -1,9 +1,13 @@
 import Anthropic from '@anthropic-ai/sdk';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { buildLLMContext } from '../utils/analytics';
-import { getAllMealsWithSymptoms } from '../db/database';
+import { buildTodayContext, buildTrendsContext } from '../utils/analytics';
+import { getAllMealsWithSymptoms, getAllDays, getDayDetail } from '../db/database';
+import { todayString } from '../utils/dateUtils';
 
 const API_KEY_STORAGE = 'anthropic_api_key';
+
+export type AgentType = 'today' | 'trends';
+export interface ChatMessage { role: 'user' | 'assistant'; content: string; }
 
 export async function getStoredApiKey(): Promise<string | null> {
   return AsyncStorage.getItem(API_KEY_STORAGE);
@@ -17,23 +21,28 @@ export async function clearApiKey(): Promise<void> {
   await AsyncStorage.removeItem(API_KEY_STORAGE);
 }
 
-const SYSTEM_PROMPT = `You are a compassionate GERD (Gastroesophageal Reflux Disease) health assistant embedded in a personal tracking app. You help the user understand their symptom patterns, identify food triggers, and manage their condition day-to-day.
-
-You have access to the user's full meal log, including:
-- Exact timestamps when each food was eaten
-- Timestamps when each symptom appeared and which meal it was linked to
-- Time elapsed between eating and symptom onset
-- Symptom severity (1–5 scale)
-- Daily metrics: water intake, Metamucil, Gaviscon doses, toilet session durations
+const TODAY_SYSTEM = `You are a GERD health assistant focused on today's activity. You have the user's complete log for today — exact meal times, symptoms with onset timing, water intake, medications, and bathroom sessions.
 
 When answering:
-- Reference specific foods, times, and elapsed durations from the data when relevant
-- Be practical and specific, not generic
-- Note patterns with confidence caveats when sample sizes are small
-- Do NOT give medical diagnoses or replace medical advice — encourage the user to share findings with their doctor
+- Reference specific times, foods, and elapsed durations from today's data
+- Help the user understand what's happening right now or over the course of today
+- Note if data is sparse (e.g. "only 2 meals logged so far today")
+- Do NOT give medical diagnoses — encourage sharing findings with their doctor
+- Keep responses concise and easy to read on a phone screen`;
+
+const TRENDS_SYSTEM = `You are a GERD health assistant focused on multi-day patterns and trends. You have the user's full history — food trigger rates, symptom frequencies, and daily metrics over time.
+
+When answering:
+- Look for patterns across days, weeks, or the full history
+- Highlight foods with high or low trigger rates, and note sample size
+- Reference daily metric trends (water, Gaviscon, Metamucil) when relevant
+- Be specific about timeframes ("over the last 2 weeks" vs "all time")
+- Do NOT give medical diagnoses — encourage sharing findings with their doctor
 - Keep responses concise and easy to read on a phone screen`;
 
 export async function streamChat(
+  agentType: AgentType,
+  history: ChatMessage[],
   userMessage: string,
   onDelta: (text: string) => void,
   onDone: () => void,
@@ -47,11 +56,19 @@ export async function streamChat(
 
   let context = '';
   try {
-    const meals = await getAllMealsWithSymptoms();
-    context = buildLLMContext(meals);
-  } catch (e) {
-    context = 'Could not load meal data.';
+    if (agentType === 'today') {
+      const detail = await getDayDetail(todayString());
+      context = detail ? buildTodayContext(detail) : 'No data logged today yet.';
+    } else {
+      const [meals, days] = await Promise.all([getAllMealsWithSymptoms(), getAllDays()]);
+      context = buildTrendsContext(meals, days);
+    }
+  } catch {
+    context = 'Could not load health data.';
   }
+
+  const systemPrompt = agentType === 'today' ? TODAY_SYSTEM : TRENDS_SYSTEM;
+  const systemWithContext = `${systemPrompt}\n\n## Current health data:\n\n${context}`;
 
   const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
 
@@ -59,20 +76,15 @@ export async function streamChat(
     const stream = await client.messages.stream({
       model: 'claude-haiku-4-5',
       max_tokens: 1024,
-      system: SYSTEM_PROMPT,
+      system: systemWithContext,
       messages: [
-        {
-          role: 'user',
-          content: `Here is my current health log data:\n\n${context}\n\n---\n\n${userMessage}`,
-        },
+        ...history.map(m => ({ role: m.role, content: m.content })),
+        { role: 'user', content: userMessage },
       ],
     });
 
     for await (const event of stream) {
-      if (
-        event.type === 'content_block_delta' &&
-        event.delta.type === 'text_delta'
-      ) {
+      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
         onDelta(event.delta.text);
       }
     }
