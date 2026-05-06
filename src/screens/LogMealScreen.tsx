@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, Image, Alert, ActivityIndicator,
+  ScrollView, Image, Alert, ActivityIndicator, Platform,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system/legacy';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { format } from 'date-fns';
 import { colors } from '../utils/colors';
 import { insertMeal, insertMealPhoto, getDistinctMealNames } from '../db/database';
 import { nowISO, todayString } from '../utils/dateUtils';
@@ -22,6 +25,11 @@ export function LogMealScreen() {
   const [description, setDescription] = useState('');
   const [photoUris, setPhotoUris] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+
+  // Meal time state — defaults to now, overridden by photo timestamp
+  const [mealTime, setMealTime] = useState<Date>(new Date());
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [timeFromPhoto, setTimeFromPhoto] = useState(false);
 
   useEffect(() => {
     getDistinctMealNames().then(setAllMealNames);
@@ -60,6 +68,7 @@ export function LogMealScreen() {
     }
   };
 
+  /** Extract the photo's creation timestamp via MediaLibrary and save locally */
   const savePhoto = async (uri: string) => {
     const dir = `${FileSystem.documentDirectory}meals/`;
     await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
@@ -67,10 +76,37 @@ export function LogMealScreen() {
     const dest = `${dir}${filename}`;
     await FileSystem.copyAsync({ from: uri, to: dest });
     setPhotoUris(prev => [...prev, dest]);
+
+    // Try to get the photo's original timestamp from MediaLibrary
+    try {
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') return;
+
+      const asset = await MediaLibrary.getAssetInfoAsync(uri);
+      if (asset && asset.creationTime) {
+        const photoDate = new Date(asset.creationTime);
+        // Only use the first photo's timestamp
+        setMealTime(prev => {
+          // If no photo timestamp set yet, or this is the first photo
+          if (!timeFromPhoto) {
+            setTimeFromPhoto(true);
+            return photoDate;
+          }
+          return prev;
+        });
+      }
+    } catch {
+      // Silently fall back to current time if MediaLibrary fails
+    }
   };
 
   const removePhoto = (index: number) => {
     setPhotoUris(prev => prev.filter((_, i) => i !== index));
+    // If all photos removed, reset time to now
+    if (photoUris.length <= 1) {
+      setMealTime(new Date());
+      setTimeFromPhoto(false);
+    }
   };
 
   const showPhotoOptions = () => {
@@ -81,6 +117,14 @@ export function LogMealScreen() {
     ]);
   };
 
+  const onTimeChange = (_event: any, selectedTime?: Date) => {
+    setShowTimePicker(Platform.OS === 'ios'); // iOS stays open until dismissed
+    if (selectedTime) {
+      setMealTime(selectedTime);
+      setTimeFromPhoto(false); // user manually overrode
+    }
+  };
+
   const save = async () => {
     if (!name.trim()) {
       Alert.alert('Name required', 'Please enter what you ate.');
@@ -88,9 +132,11 @@ export function LogMealScreen() {
     }
     setSaving(true);
     try {
+      const loggedAt = mealTime.toISOString();
+      const mealDate = format(mealTime, 'yyyy-MM-dd');
       const id = await insertMeal({
-        date,
-        logged_at: nowISO(),
+        date: mealDate,
+        logged_at: loggedAt,
         name: name.trim(),
         description: description.trim() || null,
         photo_uri: photoUris[0] ?? null,
@@ -105,8 +151,34 @@ export function LogMealScreen() {
     }
   };
 
+  const timeLabel = format(mealTime, 'h:mm a');
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      {/* Meal Time */}
+      <Text style={styles.label}>Meal time</Text>
+      <TouchableOpacity
+        style={styles.timeRow}
+        onPress={() => setShowTimePicker(true)}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="time-outline" size={18} color={colors.primary} />
+        <Text style={styles.timeValue}>{timeLabel}</Text>
+        {timeFromPhoto && (
+          <Text style={styles.timeBadge}>from photo</Text>
+        )}
+        <Ionicons name="chevron-down" size={16} color={colors.textSecondary} style={styles.timeChevron} />
+      </TouchableOpacity>
+      {showTimePicker && (
+        <DateTimePicker
+          value={mealTime}
+          mode="time"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={onTimeChange}
+          minuteInterval={5}
+        />
+      )}
+
       <Text style={styles.label}>What did you eat?</Text>
       <TextInput
         style={styles.input}
@@ -212,6 +284,34 @@ const styles = StyleSheet.create({
   },
   suggestionIcon: { flexShrink: 0 },
   suggestionText: { fontSize: 14, color: colors.textPrimary },
+  timeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 12,
+    gap: 8,
+  },
+  timeValue: {
+    fontSize: 15,
+    color: colors.textPrimary,
+    fontWeight: '500',
+  },
+  timeBadge: {
+    fontSize: 11,
+    color: colors.primary,
+    backgroundColor: `${colors.primary}18`,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    overflow: 'hidden',
+    fontWeight: '600',
+  },
+  timeChevron: {
+    marginLeft: 'auto',
+  },
   photoRow: { marginTop: 4 },
   photoRowContent: { gap: 10, paddingVertical: 4 },
   thumbWrapper: { position: 'relative' },
