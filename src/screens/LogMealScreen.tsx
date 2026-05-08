@@ -18,6 +18,7 @@ export function LogMealScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const date: string = route.params?.date ?? todayString();
+  const barcodeName: string = route.params?.barcodeName ?? '';
 
   const [name, setName] = useState('');
   const [nameFocused, setNameFocused] = useState(false);
@@ -34,6 +35,11 @@ export function LogMealScreen() {
   useEffect(() => {
     getDistinctMealNames().then(setAllMealNames);
   }, []);
+
+  // Pre-fill name from barcode scan
+  useEffect(() => {
+    if (barcodeName) setName(barcodeName);
+  }, [barcodeName]);
 
   const suggestions = name.trim().length > 0
     ? allMealNames
@@ -117,6 +123,10 @@ export function LogMealScreen() {
     ]);
   };
 
+  const scanBarcode = () => {
+    navigation.navigate('BarcodeScanner' as any);
+  };
+
   const onTimeChange = (_event: any, selectedTime?: Date) => {
     setShowTimePicker(Platform.OS === 'ios'); // iOS stays open until dismissed
     if (selectedTime) {
@@ -180,16 +190,21 @@ export function LogMealScreen() {
       )}
 
       <Text style={styles.label}>What did you eat?</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="e.g. Grilled chicken, tomato sauce pasta…"
-        placeholderTextColor={colors.textDisabled}
-        value={name}
-        onChangeText={setName}
-        onFocus={() => setNameFocused(true)}
-        onBlur={() => setTimeout(() => setNameFocused(false), 150)}
-        autoFocus
-      />
+      <View style={styles.nameRow}>
+        <TextInput
+          style={styles.nameInput}
+          placeholder="e.g. Grilled chicken, tomato sauce pasta…"
+          placeholderTextColor={colors.textDisabled}
+          value={name}
+          onChangeText={setName}
+          onFocus={() => setNameFocused(true)}
+          onBlur={() => setTimeout(() => setNameFocused(false), 150)}
+          autoFocus
+        />
+        <TouchableOpacity style={styles.scanBtn} onPress={scanBarcode}>
+          <Ionicons name="barcode-outline" size={22} color={colors.primary} />
+        </TouchableOpacity>
+      </View>
       {nameFocused && suggestions.length > 0 && (
         <View style={styles.suggestions}>
           {suggestions.map(s => (
@@ -253,6 +268,31 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   content: { padding: 20 },
   label: { fontSize: 14, fontWeight: '600', color: colors.textSecondary, marginBottom: 6, marginTop: 16 },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  nameInput: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 12,
+    fontSize: 15,
+    color: colors.textPrimary,
+  },
+  scanBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   input: {
     backgroundColor: colors.surface,
     borderRadius: 10,

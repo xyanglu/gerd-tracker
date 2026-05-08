@@ -20,6 +20,7 @@ import { LogSymptomScreen } from './src/screens/LogSymptomScreen';
 import { MealDetailScreen } from './src/screens/MealDetailScreen';
 import { DayDetailScreen } from './src/screens/DayDetailScreen';
 import { WakeUpScreen } from './src/screens/WakeUpScreen';
+import { BarcodeScannerScreen } from './src/screens/BarcodeScannerScreen';
 import { colors } from './src/utils/colors';
 import {
   loadReminderSettings, saveReminderSettings, scheduleAllReminders,
@@ -59,6 +60,7 @@ function TodayStack() {
       <Stack.Screen name="LogMeal" component={LogMealScreen} options={{ title: 'Log Meal' }} />
       <Stack.Screen name="LogSymptom" component={LogSymptomScreen} options={{ title: 'Log Symptom' }} />
       <Stack.Screen name="MealDetail" component={MealDetailScreen} options={{ title: 'Meal Details' }} />
+      <Stack.Screen name="BarcodeScanner" component={BarcodeScannerScreen} options={{ title: 'Scan Barcode', headerShown: false }} />
     </Stack.Navigator>
   );
 }
